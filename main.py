@@ -1,3 +1,4 @@
-from frontend.main import app
+from frontend.main import App
 
-app()
+app = App()
+app.render()
