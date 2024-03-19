@@ -6,6 +6,8 @@ import threading
 # https://discuss.streamlit.io/t/concurrency-with-streamlit/29500/6
 # https://discuss.streamlit.io/t/does-streamlit-is-running-on-a-single-threaded-development-server-by-default-or-not/9898
 # https://gist.github.com/tvst/fa33b9dcb58040cbcb0ea376146d4e8c
+# nicegui 
+# Shiny
 
 
 class App:
@@ -18,11 +20,9 @@ class App:
         self.data_source = None
         self.processingSource = False
 
-    def _processSourceUpload(self, source):
-        self.processingSource = True
-
     def _renderAddExternalSourcesSection(self):
         possible_sources = ["Confluence", "Sharepoint"]
+        sourceToLoad = None
         if (len(self.external_data_sources) == 0):
             st.warning(
                 "Add External Sources. You have no external sources to query from.")
@@ -35,10 +35,14 @@ class App:
             captions=["Data from Confluence spaces", "Data from Sharepoint"])
         submitBtn = upload_form.form_submit_button("Add Source")
         if submitBtn:
-            self._processSourceUpload(sourceToLoad)
+            self.processingSource = True
         if (self.processingSource is True):
-            placeholder.empty()
-            return
+            if (len(self.external_data_sources) == len(possible_sources)):
+                placeholder.empty()
+            with st.spinner(f"Processing {sourceToLoad} data..."):
+                self.external_data_sources.append(sourceToLoad)
+                self.processingSource = False
+                st.rerun()
 
     def render(self):
         if len(self.external_data_sources) != 2:
@@ -51,16 +55,51 @@ class App:
             f"Test {self.model} LLM on your own data from {self.data_source}!")
         st.write(
             f'Select a model and start chatting. To test the model against your own data, insert a url or upload a document.')
-        with st.form('my_form'):
-            text = st.text_area('Enter your question:', '')
-            submitted = st.form_submit_button(
-                'Submit', disabled=len(self.external_data_sources) == 0)
-            if submitted:
-                self.query = text
-                self.submit()
+        prompt = st.chat_input(placeholder='Enter your question:')
+        chatContainer = st.container()
+        st.markdown('''
+            <style>
+                [data-testid="element-container"] + [data-testid=stVerticalBlockBorderWrapper] > div > [data-testid="stVerticalBlock"] {
+                    max-height: 650px !important;
+                    overflow-y: auto !important;
+                }
+            </style>''', unsafe_allow_html=True)
+        if prompt:
+            self.query = prompt
+            self.submit(chatContainer)
 
-    def submit(self):
-        pass
+    def submit(self, chatContainer):
+        with chatContainer:
+            with st.chat_message("user"):
+                st.write("Hello 👋")
+            with st.chat_message("ai"):
+                st.write("Hello 👋 back!")
+            with st.chat_message("ai"):
+                st.write("Hello 👋 back!")
+            with st.chat_message("ai"):
+                st.write("Hello 👋 back!")
+            with st.chat_message("ai"):
+                st.write("Hello 👋 back!")
+            with st.chat_message("ai"):
+                st.write("Hello 👋 back!")
+            with st.chat_message("ai"):
+                st.write("Hello 👋 back!")
+            with st.chat_message("ai"):
+                st.write("Hello 👋 back!")
+            with st.chat_message("ai"):
+                st.write("Hello 👋 back!")
+            with st.chat_message("ai"):
+                st.write("Hello 👋 back!")
+            with st.chat_message("ai"):
+                st.write("Hello 👋 back!")
+            with st.chat_message("ai"):
+                st.write("Hello 👋 back!")
+            with st.chat_message("ai"):
+                st.write("Hello 👋 back!")
+            with st.chat_message("ai"):
+                st.write("Hello 👋 back!")
+            with st.chat_message("ai"):
+                st.write("Hello 👋 back!")
 
     @property
     def selected_values_and_query(self):
