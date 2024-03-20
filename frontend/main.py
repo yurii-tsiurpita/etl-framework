@@ -19,19 +19,21 @@ import threading
 class App:
     def __init__(self, confluence_etl: Etl):
         self.models = ["Mistral", "Llama2", "GPT 3.5"]
-        # self.external_data_sources = ["Confluence", "Sharepoint"]
         self.external_data_sources = []
         self.model = None
         self.data_source = None
         self.processingSource = False
         self.confluence_etl = confluence_etl
         self.chat_container = None
-        self._initAiAssistant()
+        self._initAiAssistantAndSources()
 
-    def _initAiAssistant(self):
+    def _initAiAssistantAndSources(self):
         confluence_etl: Etl = self.confluence_etl
-        # isDataLoaded = os.path.isdir("./data")
-        isDataLoaded = False
+        isDataLoaded = os.path.isdir("./data")
+        if os.path.isdir("./data/confluence_chroma"):
+            self.external_data_sources.append("Confluence")
+        elif os.path.isdir("./data/sharepoint_chroma"):
+            self.external_data_sources.append("Sharepoint")
         chroma = None if isDataLoaded is False else confluence_etl.getChroma()
         self.confluence_assistant = None if isDataLoaded is False else AiAssistant(chroma)
     
@@ -49,7 +51,7 @@ class App:
         upload_form = expander.form('upload_form', border=False)
         sourceToLoad = upload_form.radio(
             "Here from where you can add sources:",
-            [item for item in possible_sources if item not in self.external_data_sources],
+            possible_sources,
             captions=["Data from Confluence spaces", "Data from Sharepoint"])
         submitBtn = upload_form.form_submit_button("Add Source")
         if submitBtn:
@@ -57,12 +59,12 @@ class App:
                 self.processingSource = True
                 self._unmountAiAssistant()
                 self.confluence_etl.execute()
-                self._initAiAssistant()
+                self._initAiAssistantAndSources()
         if (self.processingSource is True):
             if (len(self.external_data_sources) == len(possible_sources)):
                 placeholder.empty()
             with st.spinner(f"Processing {sourceToLoad} data..."):
-                self.external_data_sources.append(sourceToLoad)
+                # self.external_data_sources.append(sourceToLoad)
                 self.processingSource = False
                 st.rerun()
 
