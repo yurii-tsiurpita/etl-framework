@@ -5,14 +5,11 @@ from ai_assistant.ai_assistant import AiAssistant
 from langchain_core.messages import AIMessage, HumanMessage
 from common.utils.stream_text import stream_text
 import os
-from typing import Union
 from etl.constants.etl_constants import CONFLUENCE_CHROMA_NAME
 import shutil
+from confluence.confluence_service import ConfluenceService
 #
-import time
-import threading
 # from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
-
 # https://discuss.streamlit.io/t/concurrency-with-streamlit/29500/6
 # https://discuss.streamlit.io/t/does-streamlit-is-running-on-a-single-threaded-development-server-by-default-or-not/9898
 # https://gist.github.com/tvst/fa33b9dcb58040cbcb0ea376146d4e8c
@@ -22,8 +19,8 @@ import threading
 
 class App:
     def __init__(self):
-        self.spaces = ['All']
-        self.space = None
+        self.spaces = []
+        self.fetched_spaces = []
         self.external_data_sources = []
         self.data_source = None
         self.processingSource = False
@@ -34,7 +31,6 @@ class App:
 
     def _initAiAssistantAndSources(self):
         confluence_etl: Etl = self.confluence_etl
-        isDataLoaded = os.path.isdir("./data")
         if self.hack == 0:
             self.hack = 1
             try:
@@ -46,20 +42,44 @@ class App:
             self.external_data_sources.append("Confluence")
         elif os.path.isdir("./data/sharepoint_chroma"):
             self.external_data_sources.append("Sharepoint")
-        # self.chroma = None if isDataLoaded is False else confluence_etl.getChroma()
-        # self.confluence_assistant = None if isDataLoaded is False else AiAssistant(self.chroma)
         self.chroma = confluence_etl.getChroma()
         self.confluence_assistant = AiAssistant(self.chroma)
 
-    def _performETL(self, sourceUrl: str, userNameOnSource: str, apiKey: str):
+    def _performETL(self, sourceUrl: str, userNameOnSource: str, apiKey: str, selectedSpace: str):
+        if selectedSpace == 'All':
+            selectedSpace = map(lambda space: space.key, self.fetched_spaces)
         etlConfig: EtlConfig = {
             'url': sourceUrl,
             'username': userNameOnSource,
             'api_key': apiKey,
-            'space_key': '~63fdc6360e0ddcdce18c3b23',
         }
         self.confluence_etl = Etl(etlConfig)
-        self.confluence_etl.execute()
+        self.confluence_etl.execute(selectedSpace)
+
+    def _getSpaces(self, sourceUrl: str, userNameOnSource: str, apiKey: str):
+        spaces = ConfluenceService({
+            'url': sourceUrl,
+            'username': userNameOnSource,
+            'api_key': apiKey,
+        }).getSpacesData()
+        self.fetched_spaces = spaces
+        self.spaces = list(map(lambda space: space.name, spaces))
+        self.spaces = self.spaces.append('All')
+        st.rerun()
+
+    def _isAiAssistantAvailable(self) -> bool:
+        return self.confluence_etl != None and len(self.external_data_sources) != 0
+
+    def _isReadyToLoadSource(self, sourceUrl: str, userNameOnSource: str, apiKey: str, selectedSpace: str) -> bool:
+        return ((sourceUrl != '' and sourceUrl != None)
+                and (userNameOnSource != '' and userNameOnSource != None)
+                and (apiKey != '' and apiKey != None)
+                and (selectedSpace != '' and selectedSpace != None))
+
+    def _isReadyToLoadSpace(self, sourceUrl: str, userNameOnSource: str, apiKey: str) -> bool:
+        return ((sourceUrl != '' and sourceUrl != None)
+                and (userNameOnSource != '' and userNameOnSource != None)
+                and (apiKey != '' and apiKey != None))
 
     def _renderAddExternalSourcesSection(self):
         possible_sources = ["Confluence", "Sharepoint"]
@@ -81,11 +101,20 @@ class App:
             "Enter your username for the source", placeholder="john@doe.ai")
         apiKey = col2.text_input(
             "Enter your API key for the source", placeholder="e.g. QAWehqwj11keu13", type="password")
-        submitBtn = upload_form.form_submit_button("Add Source")
+        selectedSpace = col2.selectbox(
+            "Load spaces before choosing", self.spaces)
+        # buttons
+        loadSpacesBtn = upload_form.form_submit_button(
+            "Load Spaces", disabled=not self._isReadyToLoadSpace(sourceUrl, userNameOnSource, apiKey))
+        if loadSpacesBtn:
+            self._getSpaces(sourceUrl, userNameOnSource, apiKey)
+        submitBtn = upload_form.form_submit_button("Add Source", disabled=not self._isReadyToLoadSource(
+            sourceUrl, userNameOnSource, apiKey, selectedSpace))
         if submitBtn:
             if (sourceToLoad == "Confluence"):
                 self.processingSource = True
-                self._performETL(sourceUrl, userNameOnSource, apiKey)
+                self._performETL(sourceUrl, userNameOnSource,
+                                 apiKey, selectedSpace)
                 self._initAiAssistantAndSources()
         if (self.processingSource is True):
             if (len(self.external_data_sources) == len(possible_sources)):
@@ -107,7 +136,8 @@ class App:
         st.write(
             f'Select a model and start chatting. To test the model against your own data, insert a url or upload a document.')
         # Chat
-        prompt = st.chat_input(placeholder='Enter your question:')
+        prompt = st.chat_input(
+            placeholder='Enter your question:', disabled=not self._isAiAssistantAvailable())
         st.markdown('''
             <style>
                 [data-testid="element-container"] + [data-testid=stVerticalBlockBorderWrapper] > div > [data-testid="stVerticalBlock"] {
