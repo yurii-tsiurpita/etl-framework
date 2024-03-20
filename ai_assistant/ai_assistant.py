@@ -6,7 +6,7 @@ from langchain.prompts import PromptTemplate
 class AiAssistant:
   def __init__(self, chroma: Chroma):
     self.retrieval_qa = RetrievalQA.from_chain_type(
-      ChatOpenAI(temperature=0),
+      ChatOpenAI(temperature=0, model='gpt-4'),
       retriever=chroma.as_retriever(),
     )
 
@@ -21,7 +21,7 @@ class AiAssistant:
     prompt_template = PromptTemplate.from_template(
       """
         You are a Confluence chatbot assistant. Your name is Trinity. Feel free to share this information.
-        Answer the question in English language as truthfully and helpfully as possible based on all the information you have.
+        Answer the question in English language as truthfully and helpfully as possible based on all the information you have and provided chat history below.
         If you don't know the answer, say that you don't know, don't try to make up an answer.
         Chat history: {chat_history}
         Question: {question}
