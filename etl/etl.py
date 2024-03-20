@@ -3,7 +3,7 @@ import shutil
 from typing import Iterable
 from langchain_community.document_loaders.confluence import ConfluenceLoader
 from langchain_community.vectorstores.chroma import Chroma
-from langchain_text_splitters import CharacterTextSplitter, TokenTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter, TokenTextSplitter
 from langchain_core.documents.base import Document
 from langchain_openai import OpenAIEmbeddings
 from etl.constants.etl_constants import CONFLUENCE_CHROMA_NAME
@@ -45,9 +45,12 @@ class Etl:
     return loader.load()
 
   def _transform(self, documents: Iterable[Document]) -> list[Document]:
-    character_text_splitter = CharacterTextSplitter()
-    character_splitted_documents = character_text_splitter.split_documents(documents)
-
+    recursive_character_text_splitter = RecursiveCharacterTextSplitter(
+      separators=['.', '!', '\n']
+    )
+    character_splitted_documents = recursive_character_text_splitter.split_documents(
+      documents
+    )
     token_text_splitter = TokenTextSplitter()
 
     return token_text_splitter.split_documents(character_splitted_documents)
