@@ -1,10 +1,13 @@
 import streamlit as st
 from etl.etl import Etl
+from etl.typed_dicts.etl_config import EtlConfig
 from ai_assistant.ai_assistant import AiAssistant
 from langchain_core.messages import AIMessage, HumanMessage
 from common.utils.stream_text import stream_text
 import os
 from typing import Union
+from etl.constants.etl_constants import CONFLUENCE_CHROMA_NAME
+import shutil
 #
 import time
 import threading
@@ -16,29 +19,47 @@ import threading
 # nicegui
 # Shiny
 
+
 class App:
-    def __init__(self, confluence_etl: Etl):
-        self.models = ["Mistral", "Llama2", "GPT 3.5"]
+    def __init__(self):
+        self.spaces = ['All']
+        self.space = None
         self.external_data_sources = []
-        self.model = None
         self.data_source = None
         self.processingSource = False
-        self.confluence_etl = confluence_etl
+        self.confluence_etl = None
         self.chat_container = None
+        self.hack = 0
         self._initAiAssistantAndSources()
 
     def _initAiAssistantAndSources(self):
         confluence_etl: Etl = self.confluence_etl
         isDataLoaded = os.path.isdir("./data")
+        if self.hack == 0:
+            self.hack = 1
+            try:
+                shutil.rmtree(f'./data/{ CONFLUENCE_CHROMA_NAME }')
+            except:
+                pass
+            return
         if os.path.isdir("./data/confluence_chroma"):
             self.external_data_sources.append("Confluence")
         elif os.path.isdir("./data/sharepoint_chroma"):
             self.external_data_sources.append("Sharepoint")
-        chroma = None if isDataLoaded is False else confluence_etl.getChroma()
-        self.confluence_assistant = None if isDataLoaded is False else AiAssistant(chroma)
-    
-    def _unmountAiAssistant(self):
-        self.confluence_assistant = None
+        # self.chroma = None if isDataLoaded is False else confluence_etl.getChroma()
+        # self.confluence_assistant = None if isDataLoaded is False else AiAssistant(self.chroma)
+        self.chroma = confluence_etl.getChroma()
+        self.confluence_assistant = AiAssistant(self.chroma)
+
+    def _performETL(self, sourceUrl: str, userNameOnSource: str, apiKey: str):
+        etlConfig: EtlConfig = {
+            'url': sourceUrl,
+            'username': userNameOnSource,
+            'api_key': apiKey,
+            'space_key': '~63fdc6360e0ddcdce18c3b23',
+        }
+        self.confluence_etl = Etl(etlConfig)
+        self.confluence_etl.execute()
 
     def _renderAddExternalSourcesSection(self):
         possible_sources = ["Confluence", "Sharepoint"]
@@ -49,22 +70,27 @@ class App:
         placeholder = st.empty()
         expander = placeholder.expander("Add External Sources")
         upload_form = expander.form('upload_form', border=False)
-        sourceToLoad = upload_form.radio(
+        col1, col2 = upload_form.columns(2)
+        sourceToLoad = col1.radio(
             "Here from where you can add sources:",
             possible_sources,
             captions=["Data from Confluence spaces", "Data from Sharepoint"])
+        sourceUrl = col2.text_input(
+            "Enter the URL of the source you want to add", placeholder="https://example.com")
+        userNameOnSource = col2.text_input(
+            "Enter your username for the source", placeholder="john@doe.ai")
+        apiKey = col2.text_input(
+            "Enter your API key for the source", placeholder="e.g. QAWehqwj11keu13", type="password")
         submitBtn = upload_form.form_submit_button("Add Source")
         if submitBtn:
             if (sourceToLoad == "Confluence"):
                 self.processingSource = True
-                self._unmountAiAssistant()
-                self.confluence_etl.execute()
+                self._performETL(sourceUrl, userNameOnSource, apiKey)
                 self._initAiAssistantAndSources()
         if (self.processingSource is True):
             if (len(self.external_data_sources) == len(possible_sources)):
                 placeholder.empty()
             with st.spinner(f"Processing {sourceToLoad} data..."):
-                # self.external_data_sources.append(sourceToLoad)
                 self.processingSource = False
                 st.rerun()
 
@@ -73,11 +99,11 @@ class App:
         if len(self.external_data_sources) != 2:
             self._renderAddExternalSourcesSection()
         col1, col2 = st.columns(2)
-        self.model = col1.selectbox("Choose a model", self.models)
+        self.space = col1.selectbox("Choose a space", self.spaces)
         self.data_source = col2.selectbox(
             "Choose a data source", self.external_data_sources)
         st.title(
-            f"Test {self.model} LLM on your own data from {self.data_source}!")
+            f"Test :rainbow[GPT 3.5] LLM on your own data from {self.data_source}!")
         st.write(
             f'Select a model and start chatting. To test the model against your own data, insert a url or upload a document.')
         # Chat
