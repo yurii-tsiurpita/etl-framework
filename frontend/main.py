@@ -1,6 +1,6 @@
 import streamlit as st
 from etl.etl import Etl
-from etl.typed_dicts.etl_config import EtlConfig
+from confluence.typed_dicts.confluence_config import ConfluenceConfig
 from ai_assistant.ai_assistant import AiAssistant
 from langchain_core.messages import AIMessage, HumanMessage
 from common.utils.stream_text import stream_text
@@ -26,18 +26,10 @@ class App:
         self.processingSource = False
         self.confluence_etl = None
         self.chat_container = None
-        self.hack = 0
-        self._initAiAssistantAndSources()
+        # self._initAiAssistantAndSources()
 
     def _initAiAssistantAndSources(self):
         confluence_etl: Etl = self.confluence_etl
-        if self.hack == 0:
-            self.hack = 1
-            try:
-                shutil.rmtree(f'./data/{ CONFLUENCE_CHROMA_NAME }')
-            except:
-                pass
-            return
         if os.path.isdir("./data/confluence_chroma"):
             self.external_data_sources.append("Confluence")
         elif os.path.isdir("./data/sharepoint_chroma"):
@@ -46,15 +38,17 @@ class App:
         self.confluence_assistant = AiAssistant(self.chroma)
 
     def _performETL(self, sourceUrl: str, userNameOnSource: str, apiKey: str, selectedSpace: str):
+        spacesList: list[str] = [next(filter(lambda space: space.name == selectedSpace, self.fetched_spaces), None).key]
+        print(f"Spaces List: {spacesList}")
         if selectedSpace == 'All':
-            selectedSpace = map(lambda space: space.key, self.fetched_spaces)
-        etlConfig: EtlConfig = {
+            spacesList = list(map(lambda space: space.key, self.fetched_spaces))
+        etlConfig: ConfluenceConfig = {
             'url': sourceUrl,
             'username': userNameOnSource,
             'api_key': apiKey,
         }
         self.confluence_etl = Etl(etlConfig)
-        self.confluence_etl.execute(selectedSpace)
+        self.confluence_etl.execute(spaceKeys=spacesList)
 
     def _getSpaces(self, sourceUrl: str, userNameOnSource: str, apiKey: str):
         spaces = ConfluenceService({
@@ -64,7 +58,7 @@ class App:
         }).getSpacesData()
         self.fetched_spaces = spaces
         self.spaces = list(map(lambda space: space.name, spaces))
-        self.spaces = self.spaces.append('All')
+        self.spaces.append('All')
         st.rerun()
 
     def _isAiAssistantAvailable(self) -> bool:
@@ -128,13 +122,12 @@ class App:
         if len(self.external_data_sources) != 2:
             self._renderAddExternalSourcesSection()
         col1, col2 = st.columns(2)
-        self.space = col1.selectbox("Choose a space", self.spaces)
-        self.data_source = col2.selectbox(
+        self.data_source = col1.selectbox(
             "Choose a data source", self.external_data_sources)
         st.title(
-            f"Test :rainbow[GPT 3.5] LLM on your own data from {self.data_source}!")
+            f"Test GPT 3.5 LLM on your own data from {self.data_source or ':gray[[select source above]]'}!")
         st.write(
-            f'Select a model and start chatting. To test the model against your own data, insert a url or upload a document.')
+            f'Select a source and start chatting. To test the model against your own data, insert a url and credentials.')
         # Chat
         prompt = st.chat_input(
             placeholder='Enter your question:', disabled=not self._isAiAssistantAvailable())
