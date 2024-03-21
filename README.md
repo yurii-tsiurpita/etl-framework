@@ -4,3 +4,5 @@
 2. `pip install atlassian-python-api`
 3. `pip install langchain`
 4. `pip install langchain_openai`
+or
+1. `pip install -r requirements.txt`
