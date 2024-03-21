@@ -89,8 +89,8 @@ class App:
                 "Add External Sources. You have no external sources to query from.")
         placeholder = st.empty()
         expander = placeholder.expander("Add External Sources")
-        upload_form = expander.form('upload_form', border=False)
-        col1, col2 = upload_form.columns(2)
+        upload_container = expander.container()
+        col1, col2 = upload_container.columns(2)
         sourceToLoad = col1.radio(
             "Here from where you can add sources:",
             possible_sources,
@@ -104,11 +104,11 @@ class App:
         selectedSpace = col2.selectbox(
             "Load spaces before choosing", self.spaces)
         # buttons
-        loadSpacesBtn = upload_form.form_submit_button(
+        loadSpacesBtn = upload_container.button(
             "Load Spaces", disabled=not self._isReadyToLoadSpace(sourceUrl, userNameOnSource, apiKey))
         if loadSpacesBtn:
             self._getSpaces(sourceUrl, userNameOnSource, apiKey)
-        submitBtn = upload_form.form_submit_button("Add Source", disabled=not self._isReadyToLoadSource(
+        submitBtn = upload_container.button("Add Source", disabled=not self._isReadyToLoadSource(
             sourceUrl, userNameOnSource, apiKey, selectedSpace))
         if submitBtn:
             if (sourceToLoad == "Confluence"):
