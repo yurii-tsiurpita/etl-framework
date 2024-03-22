@@ -1,13 +1,15 @@
 import streamlit as st
 from etl.etl import Etl
+from typing import Union, TypedDict, Literal
 from confluence.typed_dicts.confluence_config import ConfluenceConfig
 from ai_assistant.ai_assistant import AiAssistant
 from langchain_core.messages import AIMessage, HumanMessage
 from common.utils.stream_text import stream_text
 import os
+from confluence.confluence_service import ConfluenceService
+from streamlit.delta_generator import DeltaGenerator
 from etl.constants.etl_constants import CONFLUENCE_CHROMA_NAME
 import shutil
-from confluence.confluence_service import ConfluenceService
 #
 # from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
 # https://discuss.streamlit.io/t/concurrency-with-streamlit/29500/6
@@ -17,40 +19,73 @@ from confluence.confluence_service import ConfluenceService
 # Shiny
 
 
+class UserDataForConfluenceEtl(TypedDict):
+    sourceUrl: str
+    userNameOnSource: str
+    apiKey: str
+    selectedSpace: str
+
+
+class UserDataForSharepointEtl(TypedDict):
+    clientId: str
+    documentLibraryId: str
+    clientSecret: str
+
+# TODO add multiselect for spaces
+# TODO handle source change in chat
+# TODO handle reimport in chat
+
+
 class App:
     def __init__(self):
         self.spaces = []
         self.fetched_spaces = []
         self.external_data_sources = []
         self.data_source = None
-        self.processingSource = False
-        self.confluence_etl = None
-        self.chat_container = None
-        # self._initAiAssistantAndSources()
+        self.processingSource: bool = False
+        self.confluence_etl: Union[Etl, None] = None
+        self._initAiAssistantAndSources()
 
-    def _initAiAssistantAndSources(self):
-        confluence_etl: Etl = self.confluence_etl
+    def _checkImportedData(self) -> None:
         if os.path.isdir("./data/confluence_chroma"):
-            self.external_data_sources.append("Confluence")
+            if "Confluence" not in self.external_data_sources:
+                self.external_data_sources.append("Confluence")
         elif os.path.isdir("./data/sharepoint_chroma"):
-            self.external_data_sources.append("Sharepoint")
+            if "Sharepoint" not in self.external_data_sources:
+                self.external_data_sources.append("Sharepoint")
+
+    def _initAiAssistantAndSources(self, selectedSource: Literal["Confluence", "Sharepoint"] = "Confluence") -> None:
+        self._checkImportedData()
+        if self.confluence_etl == None:
+            self.confluence_etl = Etl({})
+        confluence_etl: Etl = self.confluence_etl
         self.chroma = confluence_etl.getChroma()
         self.confluence_assistant = AiAssistant(self.chroma)
 
-    def _performETL(self, sourceUrl: str, userNameOnSource: str, apiKey: str, selectedSpace: str):
-        spacesList: list[str] = [next(filter(lambda space: space.name == selectedSpace, self.fetched_spaces), None).key]
-        print(f"Spaces List: {spacesList}")
-        if selectedSpace == 'All':
-            spacesList = list(map(lambda space: space.key, self.fetched_spaces))
-        etlConfig: ConfluenceConfig = {
-            'url': sourceUrl,
-            'username': userNameOnSource,
-            'api_key': apiKey,
-        }
-        self.confluence_etl = Etl(etlConfig)
-        self.confluence_etl.execute(spaceKeys=spacesList)
+    def _performETL(self, selectedSource: Literal["Confluence", "Sharepoint"],
+                    userDataForConfluence: UserDataForConfluenceEtl = {},
+                    userDataForSharepoint: UserDataForSharepointEtl = {}) -> None:
+        if selectedSource == "Confluence":
+            sourceUrl = userDataForConfluence['sourceUrl']
+            userNameOnSource = userDataForConfluence['userNameOnSource']
+            apiKey = userDataForConfluence['apiKey']
+            selectedSpace = userDataForConfluence['selectedSpace']
+            spacesList: list[str] = [next(filter(
+                lambda space: space.name == selectedSpace, self.fetched_spaces), None).key]
+            if selectedSpace == 'All':
+                spacesList = list(
+                    map(lambda space: space.key, self.fetched_spaces))
+            etlConfig: ConfluenceConfig = {
+                'url': sourceUrl,
+                'username': userNameOnSource,
+                'api_key': apiKey,
+            }
+            self.confluence_etl = Etl(etlConfig)
+            self.confluence_etl.execute(spaceKeys=spacesList)
+        elif selectedSource == "Sharepoint":
+            print("Sharepoint ETL not implemented yet")
 
-    def _getSpaces(self, sourceUrl: str, userNameOnSource: str, apiKey: str):
+    def _getSpaces(self, sourceUrl: str, userNameOnSource: str, apiKey: str) -> None:
         spaces = ConfluenceService({
             'url': sourceUrl,
             'username': userNameOnSource,
@@ -64,18 +99,30 @@ class App:
     def _isAiAssistantAvailable(self) -> bool:
         return self.confluence_etl != None and len(self.external_data_sources) != 0
 
-    def _isReadyToLoadSource(self, sourceUrl: str, userNameOnSource: str, apiKey: str, selectedSpace: str) -> bool:
-        return ((sourceUrl != '' and sourceUrl != None)
-                and (userNameOnSource != '' and userNameOnSource != None)
-                and (apiKey != '' and apiKey != None)
-                and (selectedSpace != '' and selectedSpace != None))
+    def _isReadyToLoadSource(self, userData: dict[str, str | None]) -> bool:
+        if 'sourceUrl' in userData:
+            sourceUrl = userData['sourceUrl']
+            userNameOnSource = userData['userNameOnSource']
+            apiKey = userData['apiKey']
+            selectedSpace = userData['selectedSpace']
+            return ((sourceUrl != '' and sourceUrl != None)
+                    and (userNameOnSource != '' and userNameOnSource != None)
+                    and (apiKey != '' and apiKey != None)
+                    and (selectedSpace != '' and selectedSpace != None))
+        elif 'clientId' in userData:
+            clientId = userData['clientId']
+            documentLibraryId = userData['documentLibraryId']
+            clientSecret = userData['clientSecret']
+            return ((clientId != '' and clientId != None)
+                    and (documentLibraryId != '' and documentLibraryId != None)
+                    and (clientSecret != '' and clientSecret != None))
 
     def _isReadyToLoadSpace(self, sourceUrl: str, userNameOnSource: str, apiKey: str) -> bool:
         return ((sourceUrl != '' and sourceUrl != None)
                 and (userNameOnSource != '' and userNameOnSource != None)
                 and (apiKey != '' and apiKey != None))
 
-    def _renderAddExternalSourcesSection(self):
+    def _renderAddExternalSourcesSection(self) -> None:
         possible_sources = ["Confluence", "Sharepoint"]
         sourceToLoad = None
         if (len(self.external_data_sources) == 0):
@@ -89,27 +136,72 @@ class App:
             "Here from where you can add sources:",
             possible_sources,
             captions=["Data from Confluence spaces", "Data from Sharepoint"])
-        sourceUrl = col2.text_input(
-            "Enter the URL of the source you want to add", placeholder="https://example.com")
-        userNameOnSource = col2.text_input(
-            "Enter your username for the source", placeholder="john@doe.ai")
-        apiKey = col2.text_input(
-            "Enter your API key for the source", placeholder="e.g. QAWehqwj11keu13", type="password")
-        selectedSpace = col2.selectbox(
-            "Load spaces before choosing", self.spaces)
-        # buttons
-        loadSpacesBtn = upload_container.button(
-            "Load Spaces", disabled=not self._isReadyToLoadSpace(sourceUrl, userNameOnSource, apiKey))
+        # Inputs Confluence
+        sourceUrl = None
+        userNameOnSource = None
+        apiKey = None
+        selectedSpace = None
+        loadSpacesBtn = None
+        self.spaces = []
+        # Inputs Sharepoint
+        clientId = None
+        documentLibraryId = None
+        clientSecret = None
+        if (sourceToLoad == "Confluence"):
+            sourceUrl = col2.text_input(
+                "Enter the URL of the source you want to add", placeholder="https://example.com")
+            userNameOnSource = col2.text_input(
+                "Enter your username for the source", placeholder="john@doe.ai")
+            apiKey = col2.text_input(
+                "Enter your API key for the source", placeholder="e.g. QAWehqwj11keu13", type="password")
+            #  remade to multiple select
+            selectedSpace = col2.selectbox(
+                "Load spaces before choosing", self.spaces)
+            loadSpacesBtn = upload_container.button(
+                "Load Spaces", disabled=not self._isReadyToLoadSpace(sourceUrl, userNameOnSource, apiKey))
+        elif (sourceToLoad == "Sharepoint"):
+            clientId = col2.text_input(
+                "Enter the client ID of the source you want to add", placeholder="e.g. 12345678-1234-1234-1234-1234567890ab")
+            documentLibraryId = col2.text_input(
+                "Enter the document library ID for the source", placeholder="e.g. 12345678-1234-1234-1234-1234567890ab")
+            clientSecret = col2.text_input(
+                "Enter your client secret for the source", placeholder="e.g. QAWehqwj11keu13", type="password")
+
         if loadSpacesBtn:
             self._getSpaces(sourceUrl, userNameOnSource, apiKey)
-        submitBtn = upload_container.button("Add Source", disabled=not self._isReadyToLoadSource(
-            sourceUrl, userNameOnSource, apiKey, selectedSpace))
+        if sourceToLoad == "Confluence":
+            dictionaryToPassToSubmitBtn = {
+                'sourceUrl': sourceUrl,
+                'userNameOnSource': userNameOnSource,
+                'apiKey': apiKey,
+                'selectedSpace': selectedSpace
+            }
+        else:
+            dictionaryToPassToSubmitBtn = {
+                'clientId': clientId,
+                'documentLibraryId': documentLibraryId,
+                'clientSecret': clientSecret
+            }
+        submitBtn = upload_container.button(
+            "Add Source", disabled=not self._isReadyToLoadSource(userData=dictionaryToPassToSubmitBtn))
         if submitBtn:
             if (sourceToLoad == "Confluence"):
                 self.processingSource = True
-                self._performETL(sourceUrl, userNameOnSource,
-                                 apiKey, selectedSpace)
-                self._initAiAssistantAndSources()
+                self._performETL(userDataForConfluence={
+                    'sourceUrl': sourceUrl,
+                    'userNameOnSource': userNameOnSource,
+                    'apiKey': apiKey,
+                    'selectedSpace': selectedSpace
+                }, selectedSource="Confluence")
+                self._initAiAssistantAndSources(selectedSource="Confluence")
+            elif (sourceToLoad == "Sharepoint"):
+                self.processingSource = True
+                self._performETL(userDataForSharepoint={
+                    'clientId': clientId,
+                    'documentLibraryId': documentLibraryId,
+                    'clientSecret': clientSecret
+                }, selectedSource="Sharepoint")
+                self._initAiAssistantAndSources(selectedSource="Confluence")
         if (self.processingSource is True):
             if (len(self.external_data_sources) == len(possible_sources)):
                 placeholder.empty()
@@ -117,10 +209,9 @@ class App:
                 self.processingSource = False
                 st.rerun()
 
-    def render(self):
+    def render(self) -> None:
         st.set_page_config(page_title='AI Assistant', page_icon='🤖')
-        if len(self.external_data_sources) != 2:
-            self._renderAddExternalSourcesSection()
+        self._renderAddExternalSourcesSection()
         col1, col2 = st.columns(2)
         self.data_source = col1.selectbox(
             "Choose a data source", self.external_data_sources)
@@ -151,7 +242,7 @@ class App:
             chatContainer.chat_message('user').write(prompt)
             self.submit(prompt, chatContainer)
 
-    def submit(self, prompt: str, chatContainer):
+    def submit(self, prompt: str, chatContainer) -> None:
         response = chatContainer.chat_message('ai').write_stream(
             stream_text(self.confluence_assistant.answer(
                 prompt, st.session_state.chat_history))

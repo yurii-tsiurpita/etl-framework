@@ -53,8 +53,9 @@ class SharepointEtl:
     return token_text_splitter.split_documents(character_splitted_documents)
 
   def _load(self, documents: list[Document]) -> Chroma:
-    # if os.path.exists(f'./data/{ CONFLUENCE_CHROMA_NAME }'):
-    #   shutil.rmtree(f'./data/{ CONFLUENCE_CHROMA_NAME }')
+    chroma = self.getChroma()
+    documentIds = chroma.get()['ids']
+    chroma.delete(ids=documentIds)
 
     return Chroma.from_documents(
       documents,
