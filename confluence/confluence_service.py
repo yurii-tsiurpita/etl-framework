@@ -4,10 +4,11 @@ from confluence.classes.confluence_space_data import ConfluenceSpaceData
 
 class ConfluenceService:
   def __init__(self, confluenceConfig: ConfluenceConfig):
+    print(f'ConfluenceService initialized with { confluenceConfig }')
     self.confluence = Confluence(
-      url=confluenceConfig.url,
-      username=confluenceConfig.username,
-      password=confluenceConfig.api_key,
+      url=confluenceConfig['url'],
+      username=confluenceConfig['username'],
+      password=confluenceConfig['api_key'],
     )
 
   def getSpacesData(self) -> list[ConfluenceSpaceData]:
