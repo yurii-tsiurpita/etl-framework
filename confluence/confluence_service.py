@@ -1,13 +1,13 @@
 from atlassian import Confluence
+from confluence.classes.confluence_config import ConfluenceConfig
 from confluence.classes.confluence_space_data import ConfluenceSpaceData
-from confluence.typed_dicts.confluence_config import ConfluenceConfig
 
 class ConfluenceService:
   def __init__(self, confluenceConfig: ConfluenceConfig):
-    self.confluence: Confluence = Confluence(
-      url=confluenceConfig['url'],
-      username=confluenceConfig['username'],
-      password=confluenceConfig['api_key'],
+    self.confluence = Confluence(
+      url=confluenceConfig.url,
+      username=confluenceConfig.username,
+      password=confluenceConfig.api_key,
     )
 
   def getSpacesData(self) -> list[ConfluenceSpaceData]:

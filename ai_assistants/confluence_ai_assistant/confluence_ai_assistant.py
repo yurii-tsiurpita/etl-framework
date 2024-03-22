@@ -1,21 +1,10 @@
 from langchain_community.vectorstores.chroma import Chroma
-from langchain.chains.retrieval_qa.base import RetrievalQA
-from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
+from ai_assistants.ai_assistant import AiAssistant
 
-class AiAssistant:
+class ConfluenceAiAssistant(AiAssistant):
   def __init__(self, chroma: Chroma):
-    self.retrieval_qa = RetrievalQA.from_chain_type(
-      ChatOpenAI(temperature=0, model='gpt-4'),
-      retriever=chroma.as_retriever(),
-    )
-
-  def answer(self, query: str, chat_history: list) -> str:
-    prompt = self._generatePrompt(query, chat_history)
-    input = { 'query': prompt }
-    response = self.retrieval_qa.invoke(input)
-
-    return response['result']
+    super().__init__(chroma)
 
   def _generatePrompt(self, query: str, chat_history: list) -> str:
     prompt_template = PromptTemplate.from_template(

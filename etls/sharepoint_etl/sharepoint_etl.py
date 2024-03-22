@@ -6,22 +6,18 @@ from langchain_community.vectorstores.chroma import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter, TokenTextSplitter
 from langchain_core.documents.base import Document
 from langchain_openai import OpenAIEmbeddings
-from confluence.typed_dicts.confluence_config import ConfluenceConfig
-from etl.constants.etl_constants import CONFLUENCE_CHROMA_NAME
+from confluence.classes.confluence_config import ConfluenceConfig
+from langchain_community.document_loaders.sharepoint import SharePointLoader
 
-class Etl:
-  def __init__(self, confluenceConfig: ConfluenceConfig):
-    self.confluenceConfig: ConfluenceConfig = confluenceConfig
+class SharepointEtl:
+  def __init__(self, sharepoint_config: SharepointConfig):
+    self.sharepointConfig: SharepointConfig = sharepoint_config
     self.open_ai_embeddings: OpenAIEmbeddings = OpenAIEmbeddings(
       model='text-embedding-3-small',
     )
 
-  def execute(self, spaceKeys: list[str]) -> Chroma | None:
-    if not spaceKeys:
-      print('ETL process did not start because space keys are missing')
-      return
-
-    extracted_documents = self._extract(spaceKeys)
+  def execute(self, document_library_id: str) -> Chroma | None:
+    extracted_documents = self._extract(document_library_id)
     transformed_documents = self._transform(extracted_documents)
     chroma = self._load(transformed_documents)
     print('ETL process for Confluence data successfully completed')
@@ -37,23 +33,10 @@ class Etl:
       embedding_function=self.open_ai_embeddings,
     )
 
-  def _extract(self, spaceKeys: list[str]) -> list[Document]:
-    documents: list[Document] = []
+  def _extract(self, document_library_id: str) -> list[Document]:
+    sharepoint_loader = SharePointLoader(document_library_id=document_library_id)
 
-    if not spaceKeys:
-      return documents
-
-    for spaceKey in spaceKeys:
-      loader = ConfluenceLoader(
-        url=self.confluenceConfig['url'],
-        username=self.confluenceConfig['username'],
-        api_key=self.confluenceConfig['api_key'],
-        space_key=spaceKey,
-      )
-
-      documents.extend(loader.load())
-
-    return documents
+    return sharepoint_loader.load()
 
   def _transform(self, documents: Iterable[Document]) -> list[Document]:
     if not documents:
