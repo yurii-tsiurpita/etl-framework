@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from langchain_community.vectorstores.chroma import Chroma
 from langchain.chains.retrieval_qa.base import RetrievalQA
 from langchain_openai import ChatOpenAI
+from langchain.prompts import PromptTemplate
+from langchain_core.messages import AIMessage, HumanMessage
 
 class AiAssistant(ABC):
   def __init__(self, chroma: Chroma):
@@ -11,12 +13,29 @@ class AiAssistant(ABC):
     )
 
   def answer(self, query: str, chat_history: list) -> str:
-    prompt = self._generatePrompt(query, chat_history)
+    promptTemplate = self.__getPromptTemplate()
+    prompt = self._generatePrompt(promptTemplate, query, chat_history)
     input = { 'query': prompt }
     response = self.retrieval_qa.invoke(input)
 
     return response['result']
 
+  def __getPromptTemplate(self) -> PromptTemplate:
+    return PromptTemplate.from_template(
+      """
+        You are a {data_source_name} chatbot assistant. Your name is Trinity. Feel free to share this information.
+        Answer the question in English language as truthfully and helpfully as possible based on all the information you have and provided chat history below.
+        If you don't know the answer, say that you don't know, don't try to make up an answer.
+        Chat history: {chat_history}
+        Question: {question}
+      """
+    )
+
   @abstractmethod
-  def _generatePrompt(self, query: str, chat_history: list) -> str:
+  def _generatePrompt(
+    self,
+    prompt_template: PromptTemplate,
+    query: str,
+    chat_history: list[AIMessage | HumanMessage],
+  ) -> str:
     pass
