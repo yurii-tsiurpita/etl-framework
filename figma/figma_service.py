@@ -8,7 +8,7 @@ class FigmaService:
     self.config: FigmaConfig = figmaConfig
 
   def getFilesData(self) -> list[FigmaFileData]:
-    projectFiles = self._getProjectFiles()
+    projectFiles = self.__getProjectFiles()
 
     figmaFilesData: list[FigmaFileData] = []
 
@@ -21,7 +21,7 @@ class FigmaService:
 
     return figmaFilesData
 
-  def _getProjectFiles(self) -> list[FigmaFile]:
+  def __getProjectFiles(self) -> list[FigmaFile]:
     getProjectFilesResData = requests.get(
       f'https://api.figma.com/v1/projects/{self.config.project_id}/files',
       headers={ 'X-FIGMA-TOKEN': self.config.access_token },
