@@ -23,7 +23,7 @@ class UserDataForConfluenceEtl(TypedDict):
     sourceUrl: str
     userNameOnSource: str
     apiKey: str
-    selectedSpace: str
+    selectedSpaces: list[str]
 
 
 class UserDataForSharepointEtl(TypedDict):
@@ -34,6 +34,10 @@ class UserDataForSharepointEtl(TypedDict):
 # TODO add multiselect for spaces
 # TODO handle source change in chat
 # TODO handle reimport in chat
+    
+# TODO Figma: access token, project id, (get_files_data) files = spaces
+# TODO file lock presentation
+# TODO info for the presentation
 
 
 class App:
@@ -59,8 +63,9 @@ class App:
         if self.confluence_etl == None:
             self.confluence_etl = Etl({})
         confluence_etl: Etl = self.confluence_etl
-        self.chroma = confluence_etl.getChroma()
-        self.confluence_assistant = AiAssistant(self.chroma)
+        if os.path.isdir("./data/confluence_chroma"):
+            self.chroma = confluence_etl.getChroma()
+            self.confluence_assistant = AiAssistant(self.chroma)
 
     def _performETL(self, selectedSource: Literal["Confluence", "Sharepoint"],
                     userDataForConfluence: UserDataForConfluenceEtl = {},
@@ -69,19 +74,22 @@ class App:
             sourceUrl = userDataForConfluence['sourceUrl']
             userNameOnSource = userDataForConfluence['userNameOnSource']
             apiKey = userDataForConfluence['apiKey']
-            selectedSpace = userDataForConfluence['selectedSpace']
-            spacesList: list[str] = [next(filter(
-                lambda space: space.name == selectedSpace, self.fetched_spaces), None).key]
-            if selectedSpace == 'All':
-                spacesList = list(
-                    map(lambda space: space.key, self.fetched_spaces))
+            selectedSpaces = userDataForConfluence['selectedSpaces']
+            selectedSpacesKeys = []
+            if "All" in selectedSpaces:
+                selectedSpacesKeys = list(map(lambda space: space.key, self.fetched_spaces))
+            else:
+                for space in self.fetched_spaces:
+                    if (space.name in selectedSpaces):
+                        selectedSpacesKeys.append(space.key)
+            print(f"Selected spaces keys: {selectedSpacesKeys}")
             etlConfig: ConfluenceConfig = {
                 'url': sourceUrl,
                 'username': userNameOnSource,
                 'api_key': apiKey,
             }
             self.confluence_etl = Etl(etlConfig)
-            self.confluence_etl.execute(spaceKeys=spacesList)
+            self.confluence_etl.execute(spaceKeys=selectedSpacesKeys)
         elif selectedSource == "Sharepoint":
             print("Sharepoint ETL not implemented yet")
 
@@ -104,11 +112,11 @@ class App:
             sourceUrl = userData['sourceUrl']
             userNameOnSource = userData['userNameOnSource']
             apiKey = userData['apiKey']
-            selectedSpace = userData['selectedSpace']
+            selectedSpaces = userData['selectedSpaces']
             return ((sourceUrl != '' and sourceUrl != None)
                     and (userNameOnSource != '' and userNameOnSource != None)
                     and (apiKey != '' and apiKey != None)
-                    and (selectedSpace != '' and selectedSpace != None))
+                    and (len(selectedSpaces) != 0 and selectedSpaces != None))
         elif 'clientId' in userData:
             clientId = userData['clientId']
             documentLibraryId = userData['documentLibraryId']
@@ -140,9 +148,8 @@ class App:
         sourceUrl = None
         userNameOnSource = None
         apiKey = None
-        selectedSpace = None
+        selectedSpaces = None
         loadSpacesBtn = None
-        self.spaces = []
         # Inputs Sharepoint
         clientId = None
         documentLibraryId = None
@@ -155,11 +162,12 @@ class App:
             apiKey = col2.text_input(
                 "Enter your API key for the source", placeholder="e.g. QAWehqwj11keu13", type="password")
             #  remade to multiple select
-            selectedSpace = col2.selectbox(
-                "Load spaces before choosing", self.spaces)
+            selectedSpaces = col2.multiselect(
+                "Load spaces before choosing", options=self.spaces)
             loadSpacesBtn = upload_container.button(
                 "Load Spaces", disabled=not self._isReadyToLoadSpace(sourceUrl, userNameOnSource, apiKey))
         elif (sourceToLoad == "Sharepoint"):
+            self.spaces = []
             clientId = col2.text_input(
                 "Enter the client ID of the source you want to add", placeholder="e.g. 12345678-1234-1234-1234-1234567890ab")
             documentLibraryId = col2.text_input(
@@ -174,7 +182,7 @@ class App:
                 'sourceUrl': sourceUrl,
                 'userNameOnSource': userNameOnSource,
                 'apiKey': apiKey,
-                'selectedSpace': selectedSpace
+                'selectedSpaces': selectedSpaces
             }
         else:
             dictionaryToPassToSubmitBtn = {
@@ -191,7 +199,7 @@ class App:
                     'sourceUrl': sourceUrl,
                     'userNameOnSource': userNameOnSource,
                     'apiKey': apiKey,
-                    'selectedSpace': selectedSpace
+                    'selectedSpaces': selectedSpaces
                 }, selectedSource="Confluence")
                 self._initAiAssistantAndSources(selectedSource="Confluence")
             elif (sourceToLoad == "Sharepoint"):
