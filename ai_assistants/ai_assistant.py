@@ -21,11 +21,14 @@ class AiAssistant(ABC):
     return response['result']
 
   def __getPromptTemplate(self) -> PromptTemplate:
+    # If answer requires info outside provided information, say that you don't know that information.
+    # Answer the question in English language as truthfully and helpfully as possible based on all the information you have and provided chat history below.
     return PromptTemplate.from_template(
       """
         You are a {data_source_name} chatbot assistant. Your name is Trinity. Feel free to share this information.
-        Answer the question in English language as truthfully and helpfully as possible based on all the information you have and provided chat history below.
+        Answer the question in English language as truthfully and helpfully as possible only based on the context you have and provided chat history below.
         If you don't know the answer, say that you don't know, don't try to make up an answer.
+        If answer requires info outside provided information, say that you don't know that information.
         Chat history: {chat_history}
         Question: {question}
       """

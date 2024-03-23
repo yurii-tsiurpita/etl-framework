@@ -79,8 +79,7 @@ class App:
             "Figma": FigmaAiAssistant
         }
         print(f"Initiating Ai Assistant for {selectedSource}")
-        if self.etl_instance == None:
-            self.etl_instance = etlMap[selectedSource]({})
+        self.etl_instance = etlMap[selectedSource]({})
         confluence_etl: ConfluenceEtl = self.etl_instance
         if os.path.isdir(f"./data/{etlSourceLocationMap[selectedSource]}"):
             self.chroma = confluence_etl.getChroma()
