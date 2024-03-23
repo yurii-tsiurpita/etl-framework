@@ -2,7 +2,7 @@ import streamlit as st
 from etls.confluence_etl.confluence_etl import ConfluenceEtl
 from etls.figma_etl.figma_etl import FigmaEtl
 from etls.constants.etl_constants import CONFLUENCE_CHROMA_NAME, FIGMA_CHROMA_NAME
-from typing import Union, TypedDict, Literal
+from typing import Union, TypedDict, Literal, cast
 from confluence.classes.confluence_config import ConfluenceConfig
 from ai_assistants.confluence_ai_assistant.confluence_ai_assistant import ConfluenceAiAssistant
 from ai_assistants.figma_ai_assistant.figma_ai_assistant import FigmaAiAssistant
@@ -37,14 +37,8 @@ class UserDataForFigmaEtl(TypedDict):
     figmaAccessToken: str
     selectedFigmaFiles: list[str]
 
-# TODO handle source change in chat
-# TODO change chat bot first message
-# TODO handle reimport in chat
-# TODO Figma: access token, project id, (get_files_data) files = spaces
 
-# TODO add multiselect for spaces -> Done
-# TODO file lock presentation -> Done
-# TODO info for the presentation -> Done
+PossibleSources = Literal["Confluence", "Sharepoint", "Figma"]
 
 
 class App:
@@ -56,6 +50,7 @@ class App:
         self.external_data_sources = []
         self.data_source = None
         self.etl_instance: Union[ConfluenceEtl, FigmaEtl, None] = None
+        self.selected_source = None
         self._initAiAssistantAndSources()
 
     def _checkImportedData(self) -> None:
@@ -69,8 +64,7 @@ class App:
             if "Figma" not in self.external_data_sources:
                 self.external_data_sources.append("Figma")
 
-    # TODO fix this
-    def _initAiAssistantAndSources(self, selectedSource: Literal["Confluence", "Sharepoint", "Figma"] = "Confluence") -> None:
+    def _initAiAssistantAndSources(self, selectedSource: PossibleSources = "Confluence") -> None:
         self._checkImportedData()
         etlMap = {
             "Confluence": ConfluenceEtl,
@@ -84,14 +78,16 @@ class App:
             "Confluence": ConfluenceAiAssistant,
             "Figma": FigmaAiAssistant
         }
+        print(f"Initiating Ai Assistant for {selectedSource}")
         if self.etl_instance == None:
             self.etl_instance = etlMap[selectedSource]({})
         confluence_etl: ConfluenceEtl = self.etl_instance
         if os.path.isdir(f"./data/{etlSourceLocationMap[selectedSource]}"):
             self.chroma = confluence_etl.getChroma()
-            self.confluence_assistant = aiAssistantMap[selectedSource](self.chroma)
+            self.confluence_assistant = aiAssistantMap[selectedSource](
+                self.chroma)
 
-    def _performETL(self, selectedSource: Literal["Confluence", "Sharepoint", "Figma"],
+    def _performETL(self, selectedSource: PossibleSources,
                     userData: Union[UserDataForConfluenceEtl, UserDataForFigmaEtl]) -> None:
         if selectedSource == "Confluence":
             sourceUrl = userData['sourceUrl']
@@ -181,6 +177,16 @@ class App:
     def _isReadyToLoadFigmaFiles(self, figmaAccessToken: str, figmaProjectId: str) -> bool:
         return ((figmaAccessToken != '' and figmaAccessToken != None)
                 and (figmaProjectId != '' and figmaProjectId != None))
+
+    def _handleSourceChange(self, selectedSource: PossibleSources) -> None:
+        if selectedSource != self.selected_source:
+            self.selected_source = selectedSource
+            st.session_state.chat_history = cast(
+                list[AIMessage | HumanMessage],
+                [AIMessage(
+                    content=f'Hello, my name is Trinity. I am {selectedSource} chatbot assistant. How can I help you?')]
+            )
+            self._initAiAssistantAndSources(selectedSource=selectedSource)
 
     def _renderAddExternalSourcesSection(self) -> None:
         possible_sources = ["Confluence", "Sharepoint", "Figma"]
@@ -277,6 +283,7 @@ class App:
         col1, col2 = st.columns(2)
         self.data_source = col1.selectbox(
             "Choose a data source", self.external_data_sources)
+        self._handleSourceChange(selectedSource=self.data_source)
         st.title(
             f"Test GPT 3.5 LLM on your own data from {self.data_source or ':gray[[select source above]]'}!")
         st.write(
