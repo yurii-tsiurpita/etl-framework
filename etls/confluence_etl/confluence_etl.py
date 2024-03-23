@@ -36,9 +36,9 @@ class ConfluenceEtl(Etl):
 
     for spaceKey in spaceKeys:
       loader = ConfluenceLoader(
-        url=self.confluenceConfig.url,
-        username=self.confluenceConfig.username,
-        api_key=self.confluenceConfig.api_key,
+        url=self.confluenceConfig['url'],
+        username=self.confluenceConfig['username'],
+        api_key=self.confluenceConfig['api_key'],
         space_key=spaceKey,
       )
 

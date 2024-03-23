@@ -23,8 +23,9 @@ class FigmaService:
 
   def __getProjectFiles(self) -> list[FigmaFile]:
     getProjectFilesResData = requests.get(
-      f'https://api.figma.com/v1/projects/{self.config.project_id}/files',
-      headers={ 'X-FIGMA-TOKEN': self.config.access_token },
+      f"https://api.figma.com/v1/projects/{self.config['project_id']}/files",
+      headers={ 'X-FIGMA-TOKEN': self.config['access_token'] },
     ).json()
+    print(f'getProjectFilesResData: { getProjectFilesResData }')
 
     return getProjectFilesResData['files']
